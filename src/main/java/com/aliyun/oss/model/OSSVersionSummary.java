@@ -68,6 +68,9 @@ public class OSSVersionSummary implements Serializable {
     /** True if this object represents a delete marker */
     private boolean isDeleteMarker;
 
+    /** The restore info status of the object  */
+    private String restoreInfo;
+
     
     /**
      * Gets the name of the OSS bucket in which this version is stored.
@@ -260,8 +263,8 @@ public class OSSVersionSummary implements Serializable {
      * the <code>isDeleteMarker</code> property to record if this is a delete marker or not.
      * 
      * @param isDeleteMarker
-     *            Specify <code>true<code> if this version summary represents a delete marker,
-     *            otherwise <code>false<code> if it is a regular version summary.
+     *            Specify <code>true</code> if this version summary represents a delete marker,
+     *            otherwise <code>false</code> if it is a regular version summary.
      */
     public void setIsDeleteMarker(boolean isDeleteMarker) {
         this.isDeleteMarker = isDeleteMarker;
@@ -336,4 +339,22 @@ public class OSSVersionSummary implements Serializable {
         this.size = size;
     }
 
+    /**
+     * Gets the restore info of the object.
+     *
+     * @return Object restore info.
+     */
+    public String getRestoreInfo() {
+        return restoreInfo;
+    }
+
+    /**
+     * Sets the restore info of the object.
+     *
+     * @param restoreInfo
+     *            object restore info
+     */
+    public void setRestoreInfo(String restoreInfo) {
+        this.restoreInfo = restoreInfo;
+    }
 }

@@ -26,7 +26,7 @@ import static com.aliyun.oss.internal.OSSConstants.DEFAULT_CHARSET_NAME;
 import static com.aliyun.oss.internal.OSSConstants.DEFAULT_OSS_ENDPOINT;
 import static com.aliyun.oss.internal.OSSUtils.OSS_RESOURCE_MANAGER;
 import static com.aliyun.oss.internal.OSSUtils.ensureBucketNameValid;
-
+import static com.aliyun.oss.internal.OSSUtils.ensureObjectKeyValid;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -77,22 +77,32 @@ public class OSSClient implements OSS {
     private OSSDownloadOperation downloadOperation;
     private LiveChannelOperation liveChannelOperation;
 
-    /**Gets the inner multipartOperation, used for subclass to do implement opreation.*/
+    /**Gets the inner multipartOperation, used for subclass to do implement opreation.
+     * @return  the {@link OSSMultipartOperation} instance.
+     */
     public OSSMultipartOperation getMultipartOperation() {
         return multipartOperation;
     }
 
-    /**Gets the inner objectOperation, used for subclass to do implement opreation.*/
+    /**Gets the inner objectOperation, used for subclass to do implement opreation.
+     * @return  the {@link OSSObjectOperation} instance.
+     */
     public OSSObjectOperation getObjectOperation() {
         return objectOperation;
     }
 
-    /**Sets the inner downloadOperation.*/
+    /**Sets the inner downloadOperation.
+     * @param downloadOperation
+     *            the {@link OSSDownloadOperation} instance.
+     */
     public void setDownloadOperation(OSSDownloadOperation downloadOperation) {
         this.downloadOperation = downloadOperation;
     }
 
-    /**Sets the inner uploadOperation.*/
+    /**Sets the inner uploadOperation.
+     * @param uploadOperation
+     *            the {@link OSSUploadOperation} instance.
+     */
     public void setUploadOperation(OSSUploadOperation uploadOperation) {
         this.uploadOperation = uploadOperation;
     }
@@ -223,6 +233,7 @@ public class OSSClient implements OSS {
         }
         initOperations();
         setEndpoint(endpoint);
+        initDefaultsByEndpoint();
     }
 
     /**
@@ -284,6 +295,18 @@ public class OSSClient implements OSS {
         return false;
     }
 
+    private boolean isCloudBoxEndpointSuffix(URI uri)  {
+        if (uri == null || uri.getHost() == null) {
+            return false;
+        }
+        String host = uri.getHost();
+        if (host.endsWith("oss-cloudbox.aliyuncs.com") ||
+                host.endsWith("oss-cloudbox-control.aliyuncs.com")) {
+            return true;
+        }
+        return false;
+    }
+
     private URI toURI(String endpoint) throws IllegalArgumentException {
         return OSSUtils.toEndpointURI(endpoint, this.serviceClient.getClientConfiguration().getProtocol().toString());
     }
@@ -296,6 +319,37 @@ public class OSSClient implements OSS {
         this.uploadOperation = new OSSUploadOperation(this.multipartOperation);
         this.downloadOperation = new OSSDownloadOperation(objectOperation);
         this.liveChannelOperation = new LiveChannelOperation(this.serviceClient, this.credsProvider);
+    }
+
+    private void initDefaultsByEndpoint() {
+        if (!this.serviceClient.getClientConfiguration().isExtractSettingFromEndpointEnable()) {
+            return;
+        }
+
+        //cloud box endpoint pattern: cloudbox-id.region.oss-cloudbox[-control].aliyuncs.com
+        //cloudbox-id start with cb-
+        if (isCloudBoxEndpointSuffix(this.endpoint)) {
+            String host = this.endpoint.getHost();
+            String[] keys = host.split("\\.");
+            if (keys != null && keys.length == 5) {
+                if (keys[0].startsWith("cb-")) {
+                    this.setCloudBoxId(keys[0]);
+                    this.setRegion(keys[1]);
+                    this.setProduct(OSSConstants.PRODUCT_CLOUD_BOX);
+                    if (SignVersion.V4.compareTo(this.serviceClient.getClientConfiguration().getSignatureVersion()) > 0) {
+                        this.setSignatureVersionInner(SignVersion.V4);
+                    }
+                }
+            }
+        }
+    }
+
+    private void setSignatureVersionInner(SignVersion version) {
+        this.bucketOperation.setSignVersion(version);
+        this.objectOperation.setSignVersion(version);
+        this.multipartOperation.setSignVersion(version);
+        this.corsOperation.setSignVersion(version);
+        this.liveChannelOperation.setSignVersion(version);
     }
     /**
      * Sets the product name.
@@ -471,9 +525,6 @@ public class OSSClient implements OSS {
         return bucketOperation.doesBucketExists(genericRequest);
     }
 
-    /**
-     * Deprecated. Please use {@link OSSClient#doesBucketExist(String)} instead.
-     */
     @Deprecated
     public boolean isBucketExist(String bucketName) throws OSSException, ClientException {
         return this.doesBucketExist(bucketName);
@@ -861,6 +912,8 @@ public class OSSClient implements OSS {
             throw new IllegalArgumentException(OSS_RESOURCE_MANAGER.getString("MustSetBucketName"));
         }
         ensureBucketNameValid(request.getBucketName());
+        assertParameterNotNull(request.getKey(), "key");
+        ensureObjectKeyValid(request.getKey());
 
         if (request.getExpiration() == null) {
             throw new IllegalArgumentException(OSS_RESOURCE_MANAGER.getString("MustSetExpiration"));
@@ -1872,6 +1925,36 @@ public class OSSClient implements OSS {
     @Override
     public VoidResult deleteBucketTransferAcceleration(String bucketName) throws OSSException, ClientException {
         return this.bucketOperation.deleteBucketTransferAcceleration(new GenericRequest(bucketName));
+    }
+
+    @Override
+    public VoidResult putBucketAccessMonitor(String bucketName, String status) throws OSSException, ClientException {
+        return this.bucketOperation.putBucketAccessMonitor(new PutBucketAccessMonitorRequest(bucketName, status));
+    }
+
+    @Override
+    public AccessMonitor getBucketAccessMonitor(String bucketName) throws OSSException, ClientException {
+        return this.bucketOperation.getBucketAccessMonitor(new GenericRequest(bucketName));
+    }
+
+    @Override
+    public VoidResult openMetaQuery(String bucketName) throws OSSException, ClientException {
+        return this.bucketOperation.openMetaQuery(new GenericRequest(bucketName));
+    }
+
+    @Override
+    public GetMetaQueryStatusResult getMetaQueryStatus(String bucketName) throws OSSException, ClientException {
+        return this.bucketOperation.getMetaQueryStatus(new GenericRequest(bucketName, null));
+    }
+
+    @Override
+    public DoMetaQueryResult doMetaQuery(DoMetaQueryRequest doMetaQueryRequest) throws OSSException, ClientException {
+        return this.bucketOperation.doMetaQuery(doMetaQueryRequest);
+    }
+
+    @Override
+    public VoidResult closeMetaQuery(String bucketName) throws OSSException, ClientException {
+        return this.bucketOperation.closeMetaQuery(new GenericRequest(bucketName));
     }
 
     @Override

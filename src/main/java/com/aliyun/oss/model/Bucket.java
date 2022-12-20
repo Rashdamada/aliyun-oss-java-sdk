@@ -70,6 +70,11 @@ public class Bucket extends GenericResult {
 	// The id of resource group.
     private String resourceGroupId;
 
+    // Bucket access tracking status
+    private String accessMonitor;
+
+    private String xcType;
+
     /**
      * Default constructor.
      */
@@ -175,7 +180,7 @@ public class Bucket extends GenericResult {
     /**
      * Sets the bucket location.
      * 
-     * @param location
+     * @param location the bucket location
      */
     public void setLocation(String location) {
         this.location = location;
@@ -193,7 +198,7 @@ public class Bucket extends GenericResult {
     /**
      * Sets the bucket's storage class
      * 
-     * @param storageClass
+     * @param storageClass the storage class
      */
     public void setStorageClass(StorageClass storageClass) {
         this.storageClass = storageClass;
@@ -266,6 +271,9 @@ public class Bucket extends GenericResult {
 
     /**
      * set hierarchical namespace status.
+     *
+     * @param hnsStatus
+     *            the hierarchical namespace status.
      */
     public void setHnsStatus(String hnsStatus) {
         this.hnsStatus = hnsStatus;
@@ -282,8 +290,27 @@ public class Bucket extends GenericResult {
 
     /**
      * set the id of resource group.
+     *
+     * @param resourceGroupId
+     *            the resource group id.
      */
     public void setResourceGroupId(String resourceGroupId) {
         this.resourceGroupId = resourceGroupId;
+    }
+
+    public String getXcType() {
+        return xcType;
+    }
+
+    public void setXcType(String xcType) {
+        this.xcType = xcType;
+    }
+
+    public String getAccessMonitor() {
+        return accessMonitor;
+    }
+
+    public void setAccessMonitor(String accessMonitor) {
+        this.accessMonitor = accessMonitor;
     }
 }

@@ -106,6 +106,10 @@ public final class RequestParameters {
     public static final String SEQUENTIAL = "sequential";
 
     public static final String SECURITY_TOKEN = "security-token";
+    public static final String X_OSS_AC_SOURCE_IP = "x-oss-ac-source-ip";
+    public static final String X_OSS_AC_SUBNET_MASK = "x-oss-ac-subnet-mask";
+    public static final String X_OSS_AC_VPC_ID = "x-oss-ac-vpc-id";
+    public static final String X_OSS_AC_FORWARD_ALLOW = "x-oss-ac-forward-allow";
 
     public static final String POSITION = "position";
     public static final String STYLE_NAME = "styleName";
@@ -116,6 +120,9 @@ public final class RequestParameters {
     public static final String COMP_UPGRADE = "upgrade";
     public static final String COMP_RESIZE = "resize";
     public static final String COMP_TOKEN = "token";
+    public static final String COMP_GET = "get";
+    public static final String COMP_QUERY = "query";
+    public static final String META_QUERY = "metaQuery";
 
     public static final String STAT = "stat";
     public static final String HISTORY = "history";
@@ -145,4 +152,6 @@ public final class RequestParameters {
     public static final String START_AFTER = "start-after";
     public static final String FETCH_OWNER = "fetch-owner";
     public static final String SUBRESOURCE_TRANSFER_ACCELERATION = "transferAcceleration";
+
+    public static final String ACCESS_MONITOR = "accessmonitor";
 }

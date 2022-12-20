@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.CheckedInputStream;
 
+import com.aliyun.oss.internal.model.OSSErrorResult;
 import com.aliyun.oss.model.*;
 import org.jdom2.Document;
 import org.jdom2.Element;
@@ -137,6 +138,9 @@ public final class ResponseParsers {
     public static final GetSymbolicLinkResponseParser getSymbolicLinkResponseParser = new GetSymbolicLinkResponseParser();
 
     public static final DeleteDirectoryResponseParser deleteDirectoryResponseParser = new DeleteDirectoryResponseParser();
+    public static final GetBucketAccessMonitorResponseParser getBucketAccessMonitorResponseParser = new GetBucketAccessMonitorResponseParser();
+    public static final GetMetaQueryStatusResponseParser getMetaQueryStatusResponseParser = new GetMetaQueryStatusResponseParser();
+    public static final DoMetaQueryResponseParser doMetaQueryResponseParser = new DoMetaQueryResponseParser();
 
     public static Long parseLongWithDefault(String defaultValue){
         if(defaultValue == null || "".equals(defaultValue)){
@@ -154,6 +158,46 @@ public final class ResponseParsers {
             return response;
         }
 
+    }
+
+
+    public static final class ErrorResponseParser implements ResponseParser<OSSErrorResult> {
+        @Override
+        public OSSErrorResult parse(ResponseMessage response) throws ResponseParseException {
+            try {
+                return parseErrorResponse(response.getContent());
+            } finally {
+                safeCloseResponse(response);
+            }
+        }
+
+        private OSSErrorResult parseErrorResponse(InputStream inputStream) throws ResponseParseException {
+            OSSErrorResult ossErrorResult = new OSSErrorResult();
+            if (inputStream == null) {
+                return ossErrorResult;
+            }
+            try {
+                Element root = getXmlRootElement(inputStream);
+                ossErrorResult.Code = root.getChildText("Code");
+                ossErrorResult.Message = root.getChildText("Message");
+                ossErrorResult.RequestId = root.getChildText("RequestId");
+                ossErrorResult.HostId = root.getChildText("HostId");
+                ossErrorResult.ResourceType = root.getChildText("ResourceType");
+                ossErrorResult.Method = root.getChildText("Method");
+                ossErrorResult.Header = root.getChildText("Header");
+                return ossErrorResult;
+            } catch (JDOMParseException e) {
+                throw new ResponseParseException(e.getPartialDocument() + ": " + e.getMessage(), e);
+            } catch (Exception e) {
+                throw new ResponseParseException(e.getMessage(), e);
+            }
+        }
+    }
+
+    public static void setResultParameter(GenericResult result, ResponseMessage response){
+        result.setRequestId(response.getRequestId());
+        setCRC(result, response);
+        result.setResponse(response);
     }
 
     public static final class RequestIdResponseParser implements ResponseParser<VoidResult> {
@@ -1166,16 +1210,18 @@ public final class ResponseParsers {
     }
 
     public static <ResultType extends GenericResult> void setCRC(ResultType result, ResponseMessage response) {
-        InputStream inputStream = response.getRequest().getContent();
-        if (inputStream instanceof CheckedInputStream) {
-            CheckedInputStream checkedInputStream = (CheckedInputStream) inputStream;
-            result.setClientCRC(checkedInputStream.getChecksum().getValue());
-        }
+        if(response.getRequest() != null) {
+            InputStream inputStream = response.getRequest().getContent();
+            if (inputStream instanceof CheckedInputStream) {
+                CheckedInputStream checkedInputStream = (CheckedInputStream) inputStream;
+                result.setClientCRC(checkedInputStream.getChecksum().getValue());
+            }
 
-        String strSrvCrc = response.getHeaders().get(OSSHeaders.OSS_HASH_CRC64_ECMA);
-        if (strSrvCrc != null) {
-            BigInteger bi = new BigInteger(strSrvCrc);
-            result.setServerCRC(bi.longValue());
+            String strSrvCrc = response.getHeaders().get(OSSHeaders.OSS_HASH_CRC64_ECMA);
+            if (strSrvCrc != null) {
+                BigInteger bi = new BigInteger(strSrvCrc);
+                result.setServerCRC(bi.longValue());
+            }
         }
     }
 
@@ -1245,6 +1291,7 @@ public final class ResponseParsers {
                 ossObjectSummary.setLastModified(DateUtil.parseIso8601Date(elem.getChildText("LastModified")));
                 ossObjectSummary.setSize(Long.valueOf(elem.getChildText("Size")));
                 ossObjectSummary.setStorageClass(elem.getChildText("StorageClass"));
+                ossObjectSummary.setRestoreInfo(elem.getChildText("RestoreInfo"));
                 ossObjectSummary.setBucketName(objectListing.getBucketName());
 
                 if (elem.getChild("Type") != null) {
@@ -1329,6 +1376,7 @@ public final class ResponseParsers {
                 ossObjectSummary.setLastModified(DateUtil.parseIso8601Date(elem.getChildText("LastModified")));
                 ossObjectSummary.setSize(Long.valueOf(elem.getChildText("Size")));
                 ossObjectSummary.setStorageClass(elem.getChildText("StorageClass"));
+                ossObjectSummary.setRestoreInfo(elem.getChildText("RestoreInfo"));
                 ossObjectSummary.setBucketName(result.getBucketName());
 
                 if (elem.getChild("Type") != null) {
@@ -1429,6 +1477,7 @@ public final class ResponseParsers {
                 ossVersionSummary.setLastModified(DateUtil.parseIso8601Date(elem.getChildText("LastModified")));
                 ossVersionSummary.setSize(Long.valueOf(elem.getChildText("Size")));
                 ossVersionSummary.setStorageClass(elem.getChildText("StorageClass"));
+                ossVersionSummary.setRestoreInfo(elem.getChildText("RestoreInfo"));
                 ossVersionSummary.setBucketName(versionListing.getBucketName());
                 ossVersionSummary.setIsDeleteMarker(false);
 
@@ -1753,6 +1802,7 @@ public final class ResponseParsers {
                 } else if (key.equalsIgnoreCase(OSSHeaders.OSS_HEADER_VERSION_ID)) {
                     objectMeta.setVersionId(headers.get(key));
                 }
+                objectMeta.setHeader(key, headers.get(key));
             }
 
             return objectMeta;
@@ -2679,6 +2729,16 @@ public final class ResponseParsers {
             if (bucketElem.getChild("StorageClass") != null) {
                 bucket.setStorageClass(StorageClass.parse(bucketElem.getChildText("StorageClass")));
             }
+            if (bucketElem.getChild("AccessMonitor") != null) {
+                bucket.setAccessMonitor(bucketElem.getChildText("AccessMonitor"));
+            }
+
+            if (bucketElem.getChild("BucketPolicy") != null) {
+                Element policyElem = bucketElem.getChild("BucketPolicy");
+                if (policyElem.getChild("XCType") != null) {
+                    bucket.setXcType(policyElem.getChildText("XCType"));
+                }
+            }
             bucketInfo.setBucket(bucket);
 
             // comment
@@ -3183,10 +3243,26 @@ public final class ResponseParsers {
 
         if (configElem.getChild("Filter") != null) {
             Element elem = configElem.getChild("Filter");
+            InventoryFilter filter = new InventoryFilter();
             if (elem.getChildText("Prefix") != null) {
-                InventoryFilter filter = new InventoryFilter().withPrefix(elem.getChildText("Prefix"));
-                inventoryConfiguration.setInventoryFilter(filter);
+                filter = new InventoryFilter().withPrefix(elem.getChildText("Prefix"));
             }
+            if (elem.getChildText("LastModifyBeginTimeStamp") != null) {
+                filter.setLastModifyBeginTimeStamp(Long.valueOf(elem.getChildText("LastModifyBeginTimeStamp")));
+            }
+            if (elem.getChildText("LastModifyEndTimeStamp") != null) {
+                filter.setLastModifyEndTimeStamp(Long.valueOf(elem.getChildText("LastModifyEndTimeStamp")));
+            }
+            if (elem.getChildText("LowerSizeBound") != null) {
+                filter.setLowerSizeBound(Long.valueOf(elem.getChildText("LowerSizeBound")));
+            }
+            if (elem.getChildText("UpperSizeBound") != null) {
+                filter.setUpperSizeBound(Long.valueOf(elem.getChildText("UpperSizeBound")));
+            }
+            if (elem.getChildText("StorageClass") != null) {
+                filter.setStorageClass(elem.getChildText("StorageClass"));
+            }
+            inventoryConfiguration.setInventoryFilter(filter);
         }
 
         if (configElem.getChild("Schedule") != null) {
@@ -3332,6 +3408,10 @@ public final class ResponseParsers {
                 if (ruleElem.getChild("Prefix") != null) {
                     rule.setPrefix(ruleElem.getChildText("Prefix"));
                 }
+
+                if (ruleElem.getChild("AtimeBase") != null) {
+                    rule.setaTimeBase(ruleElem.getChildText("AtimeBase"));
+                }
                 
                 List<Element> tagElems = ruleElem.getChildren("Tag");
                 if (tagElems != null) {
@@ -3348,6 +3428,24 @@ public final class ResponseParsers {
                         
                         rule.addTag(key, value);
                     }
+                }
+
+                Element filterElems = ruleElem.getChild("Filter");
+                if(filterElems != null){
+                    LifecycleFilter lifecycleFilter = new LifecycleFilter();
+
+                    List<LifecycleNot> notList = new ArrayList<LifecycleNot>();
+                    for(Element notEle : filterElems.getChildren("Not")){
+                        LifecycleNot lifecycleNot = new LifecycleNot();
+                        lifecycleNot.setPrefix(notEle.getChildText("Prefix"));
+                        if (notEle.getChild("Tag") != null) {
+                            Tag tag = new Tag(notEle.getChild("Tag").getChildText("Key"), notEle.getChild("Tag").getChildText("Value"));
+                            lifecycleNot.setTag(tag);
+                        }
+                        notList.add(lifecycleNot);
+                    }
+                    lifecycleFilter.setNotList(notList);
+                    rule.setFilter(lifecycleFilter);
                 }
 
                 if (ruleElem.getChild("Status") != null) {
@@ -3398,6 +3496,15 @@ public final class ResponseParsers {
                         storageTransition
                                 .setStorageClass(StorageClass.parse(transitionElem.getChildText("StorageClass")));
                     }
+                    if (transitionElem.getChild("IsAccessTime") != null) {
+                        storageTransition.setIsAccessTime(Boolean.valueOf(transitionElem.getChildText("IsAccessTime")));
+                    }
+                    if (transitionElem.getChild("ReturnToStdWhenVisit") != null) {
+                        storageTransition.setReturnToStdWhenVisit(Boolean.valueOf(transitionElem.getChildText("ReturnToStdWhenVisit")));
+                    }
+                    if (transitionElem.getChild("AllowSmallFile") != null) {
+                        storageTransition.setAllowSmallFile(Boolean.valueOf(transitionElem.getChildText("AllowSmallFile")));
+                    }
                     storageTransitions.add(storageTransition);
                 }
                 rule.setStorageTransition(storageTransitions);
@@ -3419,6 +3526,15 @@ public final class ResponseParsers {
                     }
                     if (transitionElem.getChild("StorageClass") != null) {
                         transition.setStorageClass(StorageClass.parse(transitionElem.getChildText("StorageClass")));
+                    }
+                    if (transitionElem.getChild("IsAccessTime") != null) {
+                        transition.setIsAccessTime(Boolean.valueOf(transitionElem.getChildText("IsAccessTime")));
+                    }
+                    if (transitionElem.getChild("ReturnToStdWhenVisit") != null) {
+                        transition.setReturnToStdWhenVisit(Boolean.valueOf(transitionElem.getChildText("ReturnToStdWhenVisit")));
+                    }
+                    if (transitionElem.getChild("AllowSmallFile") != null) {
+                        transition.setAllowSmallFile(Boolean.valueOf(transitionElem.getChildText("AllowSmallFile")));
                     }
                     noncurrentVersionTransitions.add(transition);
                 }
@@ -3838,4 +3954,207 @@ public final class ResponseParsers {
         }
     }
 
+    /**
+     * Unmarshall get bucket access monitor.
+     */
+    public static final class GetBucketAccessMonitorResponseParser implements ResponseParser<AccessMonitor> {
+        @Override
+        public AccessMonitor parse(ResponseMessage response) throws ResponseParseException {
+            try {
+                AccessMonitor result = parseAccessMonitor(response.getContent());
+                setResultParameter(result, response);
+                return result;
+            } finally {
+                safeCloseResponse(response);
+            }
+        }
+
+        private AccessMonitor parseAccessMonitor(InputStream inputStream) throws ResponseParseException {
+            AccessMonitor accessMonitor = new AccessMonitor(AccessMonitor.AccessMonitorStatus.Disabled.toString());
+            if (inputStream == null) {
+                return accessMonitor;
+            }
+
+            try {
+                Element root = getXmlRootElement(inputStream);
+
+                if (root.getChildText("Status") != null) {
+                    accessMonitor.setStatus(root.getChildText("Status"));
+                }
+
+                return accessMonitor;
+            } catch (JDOMParseException e) {
+                throw new ResponseParseException(e.getPartialDocument() + ": " + e.getMessage(), e);
+            } catch (Exception e) {
+                throw new ResponseParseException(e.getMessage(), e);
+            }
+        }
+    }
+
+    public static final class GetMetaQueryStatusResponseParser implements ResponseParser<GetMetaQueryStatusResult> {
+        @Override
+        public GetMetaQueryStatusResult parse(ResponseMessage response) throws ResponseParseException {
+            try {
+                GetMetaQueryStatusResult result = parseGetMetaQueryStatusResult(response.getContent());
+                setResultParameter(result, response);
+                return result;
+            } finally {
+                safeCloseResponse(response);
+            }
+        }
+
+        private GetMetaQueryStatusResult parseGetMetaQueryStatusResult(InputStream inputStream) throws ResponseParseException {
+            GetMetaQueryStatusResult getMetaQueryStatusResult = new GetMetaQueryStatusResult();
+            if (inputStream == null) {
+                return getMetaQueryStatusResult;
+            }
+
+            try {
+                Element root = getXmlRootElement(inputStream);
+
+                if (root.getChildText("State") != null) {
+                    getMetaQueryStatusResult.setState(root.getChildText("State"));
+                }
+                if (root.getChildText("Phase") != null) {
+                    getMetaQueryStatusResult.setPhase(root.getChildText("Phase"));
+                }
+                if (root.getChildText("CreateTime") != null) {
+                    getMetaQueryStatusResult.setCreateTime(root.getChildText("CreateTime"));
+                }
+                if (root.getChildText("UpdateTime") != null) {
+                    getMetaQueryStatusResult.setUpdateTime(root.getChildText("UpdateTime"));
+                }
+                return getMetaQueryStatusResult;
+            } catch (JDOMParseException e) {
+                throw new ResponseParseException(e.getPartialDocument() + ": " + e.getMessage(), e);
+            } catch (Exception e) {
+                throw new ResponseParseException(e.getMessage(), e);
+            }
+        }
+    }
+
+    public static final class DoMetaQueryResponseParser implements ResponseParser<DoMetaQueryResult> {
+        @Override
+        public DoMetaQueryResult parse(ResponseMessage response) throws ResponseParseException {
+            try {
+                DoMetaQueryResult result = parseDoMetaQueryResult(response.getContent());
+                setResultParameter(result, response);
+                return result;
+            } finally {
+                safeCloseResponse(response);
+            }
+        }
+
+        private DoMetaQueryResult parseDoMetaQueryResult(InputStream inputStream) throws ResponseParseException {
+            DoMetaQueryResult doMetaQueryResult = new DoMetaQueryResult();
+            if (inputStream == null) {
+                return doMetaQueryResult;
+            }
+
+            try {
+                Element root = getXmlRootElement(inputStream);
+
+                if (root.getChildText("NextToken") != null) {
+                    doMetaQueryResult.setNextToken(root.getChildText("NextToken"));
+                }
+                Element filesElem = root.getChild("Files");
+                if(filesElem != null){
+                    ObjectFiles objectFiles = new ObjectFiles();
+                    List<Element> fileElem = filesElem.getChildren();
+                    List<ObjectFile> fileList = new ArrayList<ObjectFile>();
+                    for(Element elem : fileElem){
+                        ObjectFile objectFile = new ObjectFile();
+                        objectFile.setFilename(elem.getChildText("Filename"));
+                        if(!StringUtils.isNullOrEmpty(elem.getChildText("Size"))){
+                            objectFile.setSize(Long.parseLong(elem.getChildText("Size")));
+                        }
+                        objectFile.setFileModifiedTime(elem.getChildText("FileModifiedTime"));
+                        objectFile.setFileCreateTime(elem.getChildText("FileCreateTime"));
+                        objectFile.setFileAccessTime(elem.getChildText("FileAccessTime"));
+                        objectFile.setOssObjectType(elem.getChildText("OSSObjectType"));
+                        objectFile.setOssStorageClass(elem.getChildText("OSSStorageClass"));
+                        objectFile.setObjectACL(elem.getChildText("ObjectACL"));
+                        objectFile.setETag(elem.getChildText("ETag"));
+                        objectFile.setOssCRC64(elem.getChildText("OSSCRC64"));
+                        if(!StringUtils.isNullOrEmpty(elem.getChildText("OSSTaggingCount"))){
+                            objectFile.setOssTaggingCount(Integer.parseInt(elem.getChildText("OSSTaggingCount")));
+                        }
+
+                        Element ossTaggingElem = elem.getChild("OSSTagging");
+                        if(ossTaggingElem != null){
+                            OSSTagging ossTagging = new OSSTagging();
+                            List<Element> taggingElem = ossTaggingElem.getChildren();
+                            List<Tagging> taggingList = new ArrayList<Tagging>();
+                            for(Element ele : taggingElem){
+                                Tagging tagging = new Tagging();
+                                tagging.setKey(ele.getChildText("Key"));
+                                tagging.setValue(ele.getChildText("Value"));
+                                taggingList.add(tagging);
+                            }
+                            ossTagging.setTagging(taggingList);
+                            objectFile.setOssTagging(ossTagging);
+                        }
+
+                        Element ossUserMetaElem = elem.getChild("OSSUserMeta");
+                        if(ossUserMetaElem != null){
+                            OSSUserMeta ossUserMeta = new OSSUserMeta();
+                            List<Element> userMetaElem = ossUserMetaElem.getChildren();
+                            List<UserMeta> userMetaList = new ArrayList<UserMeta>();
+                            for(Element ele : userMetaElem){
+                                UserMeta userMeta = new UserMeta();
+                                userMeta.setKey(ele.getChildText("Key"));
+                                userMeta.setValue(ele.getChildText("Value"));
+                                userMetaList.add(userMeta);
+                            }
+                            ossUserMeta.setUserMeta(userMetaList);
+                            objectFile.setOssUserMeta(ossUserMeta);
+                        }
+                        fileList.add(objectFile);
+                    }
+                    objectFiles.setFile(fileList);
+                    doMetaQueryResult.setFiles(objectFiles);
+                }
+
+                Element elem = root.getChild("Aggregations");
+                if(elem != null){
+                    List<Aggregation> aggregationList = new ArrayList<Aggregation>();
+                    Aggregations aggregations = new Aggregations();
+                    for(Element el : elem.getChildren()){
+                        Aggregation aggregation = new Aggregation();
+                        aggregation.setField(el.getChildText("Field"));
+                        aggregation.setOperation(el.getChildText("Operation"));
+                        if(!StringUtils.isNullOrEmpty(el.getChildText("Value"))){
+                            aggregation.setValue(Double.parseDouble(el.getChildText("Value")));
+                        }
+
+                        Element elemGroup = el.getChild("Groups");
+                        if(elemGroup != null){
+                            List<AggregationGroup> groupList = new ArrayList<AggregationGroup>();
+                            AggregationGroups aggregationGroups = new AggregationGroups();
+                            for(Element e : elemGroup.getChildren()){
+                                AggregationGroup aggregationGroup = new AggregationGroup();
+                                aggregationGroup.setValue(e.getChildText("Value"));
+                                if(!StringUtils.isNullOrEmpty(e.getChildText("Count"))){
+                                    aggregationGroup.setCount(Integer.parseInt(e.getChildText("Count")));
+                                }
+                                groupList.add(aggregationGroup);
+                            }
+                            aggregationGroups.setGroup(groupList);
+                            aggregation.setGroups(aggregationGroups);
+                        }
+
+                        aggregationList.add(aggregation);
+                    }
+                    aggregations.setAggregation(aggregationList);
+                    doMetaQueryResult.setAggregations(aggregations);
+                }
+
+                return doMetaQueryResult;
+            } catch (JDOMParseException e) {
+                throw new ResponseParseException(e.getPartialDocument() + ": " + e.getMessage(), e);
+            } catch (Exception e) {
+                throw new ResponseParseException(e.getMessage(), e);
+            }
+        }
+    }
 }

@@ -20,13 +20,16 @@
 package com.aliyun.oss.internal;
 
 import static com.aliyun.oss.common.parser.RequestMarshallers.*;
+import static com.aliyun.oss.common.parser.RequestMarshallers.putBucketAccessMonitorRequestMarshaller;
 import static com.aliyun.oss.common.utils.CodingUtils.assertParameterNotNull;
 import static com.aliyun.oss.internal.OSSUtils.OSS_RESOURCE_MANAGER;
 import static com.aliyun.oss.internal.OSSUtils.ensureBucketNameValid;
 import static com.aliyun.oss.internal.OSSUtils.ensureBucketNameCreationValid;
 import static com.aliyun.oss.internal.OSSUtils.safeCloseResponse;
 import static com.aliyun.oss.internal.RequestParameters.*;
+import static com.aliyun.oss.internal.RequestParameters.ACCESS_MONITOR;
 import static com.aliyun.oss.internal.ResponseParsers.*;
+import static com.aliyun.oss.internal.ResponseParsers.getBucketAccessMonitorResponseParser;
 
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
@@ -2003,5 +2006,114 @@ public class OSSBucketOperation extends OSSOperation {
         if (payer != null && payer.equals(Payer.Requester)) {
             headers.put(OSSHeaders.OSS_REQUEST_PAYER, payer.toString().toLowerCase());
         }
+    }
+
+    public VoidResult putBucketAccessMonitor(PutBucketAccessMonitorRequest putBucketAccessMonitorRequest) throws OSSException, ClientException {
+        assertParameterNotNull(putBucketAccessMonitorRequest, "putBucketAccessMonitorRequest");
+
+        String bucketName = putBucketAccessMonitorRequest.getBucketName();
+        assertParameterNotNull(bucketName, "bucketName");
+        ensureBucketNameValid(bucketName);
+
+        Map<String, String> params = new HashMap<String, String>();
+        params.put(ACCESS_MONITOR, null);
+
+        byte[] rawContent = putBucketAccessMonitorRequestMarshaller.marshall(putBucketAccessMonitorRequest);
+
+        RequestMessage request = new OSSRequestMessageBuilder(getInnerClient()).setEndpoint(getEndpoint())
+                .setMethod(HttpMethod.PUT).setBucket(bucketName).setParameters(params)
+                .setOriginalRequest(putBucketAccessMonitorRequest).setInputSize(rawContent.length).setInputStream(new ByteArrayInputStream(rawContent)).build();
+
+        return doOperation(request, requestIdResponseParser, bucketName, null, true);
+    }
+
+    public AccessMonitor getBucketAccessMonitor(GenericRequest genericRequest) throws OSSException, ClientException {
+        assertParameterNotNull(genericRequest, "genericRequest");
+
+        String bucketName = genericRequest.getBucketName();
+        assertParameterNotNull(bucketName, "bucketName");
+        ensureBucketNameValid(bucketName);
+
+        Map<String, String> params = new HashMap<String, String>();
+        params.put(ACCESS_MONITOR, null);
+
+        RequestMessage request = new OSSRequestMessageBuilder(getInnerClient()).setEndpoint(getEndpoint())
+                .setMethod(HttpMethod.GET).setBucket(bucketName).setParameters(params)
+                .setOriginalRequest(genericRequest).build();
+
+        return doOperation(request, getBucketAccessMonitorResponseParser, bucketName, null, true);
+    }
+
+    public VoidResult openMetaQuery(GenericRequest genericRequest) throws OSSException, ClientException {
+        assertParameterNotNull(genericRequest, "genericRequest");
+
+        String bucketName = genericRequest.getBucketName();
+        assertParameterNotNull(bucketName, "bucketName");
+        ensureBucketNameValid(bucketName);
+
+        Map<String, String> params = new HashMap<String, String>();
+        params.put(META_QUERY, null);
+        params.put(SUBRESOURCE_COMP, COMP_ADD);
+
+        RequestMessage request = new OSSRequestMessageBuilder(getInnerClient()).setEndpoint(getEndpoint())
+                .setMethod(HttpMethod.POST).setBucket(bucketName).setParameters(params)
+                .setOriginalRequest(genericRequest).setInputSize(0).setInputStream(new ByteArrayInputStream(new byte[0])).build();
+
+        return doOperation(request, requestIdResponseParser, bucketName, null, true);
+    }
+
+    public GetMetaQueryStatusResult getMetaQueryStatus(GenericRequest genericRequest) throws OSSException, ClientException {
+        assertParameterNotNull(genericRequest, "genericRequest");
+
+        String bucketName = genericRequest.getBucketName();
+        assertParameterNotNull(bucketName, "bucketName");
+        ensureBucketNameValid(bucketName);
+
+        Map<String, String> params = new HashMap<String, String>();
+        params.put(META_QUERY, null);
+
+        RequestMessage request = new OSSRequestMessageBuilder(getInnerClient()).setEndpoint(getEndpoint())
+                .setMethod(HttpMethod.GET).setBucket(bucketName).setParameters(params)
+                .setOriginalRequest(genericRequest).build();
+
+        return doOperation(request, getMetaQueryStatusResponseParser, bucketName, null, true);
+    }
+
+    public DoMetaQueryResult doMetaQuery(DoMetaQueryRequest doMetaQueryRequest) throws OSSException, ClientException {
+        assertParameterNotNull(doMetaQueryRequest, "doMetaQueryRequest");
+
+        String bucketName = doMetaQueryRequest.getBucketName();
+        assertParameterNotNull(bucketName, "bucketName");
+        ensureBucketNameValid(bucketName);
+
+        Map<String, String> params = new HashMap<String, String>();
+        params.put(META_QUERY, null);
+        params.put(SUBRESOURCE_COMP, COMP_QUERY);
+
+        byte[] rawContent = doMetaQueryRequestMarshaller.marshall(doMetaQueryRequest);
+
+        RequestMessage request = new OSSRequestMessageBuilder(getInnerClient()).setEndpoint(getEndpoint())
+                .setMethod(HttpMethod.POST).setBucket(bucketName).setParameters(params)
+                .setOriginalRequest(doMetaQueryRequest).setInputSize(rawContent.length).setInputStream(new ByteArrayInputStream(rawContent)).build();
+
+        return doOperation(request, doMetaQueryResponseParser, bucketName, null, true);
+    }
+
+    public VoidResult closeMetaQuery(GenericRequest genericRequest) throws OSSException, ClientException {
+        assertParameterNotNull(genericRequest, "genericRequest");
+
+        String bucketName = genericRequest.getBucketName();
+        assertParameterNotNull(bucketName, "bucketName");
+        ensureBucketNameValid(bucketName);
+
+        Map<String, String> params = new HashMap<String, String>();
+        params.put(META_QUERY, null);
+        params.put(SUBRESOURCE_COMP, COMP_DELETE);
+
+        RequestMessage request = new OSSRequestMessageBuilder(getInnerClient()).setEndpoint(getEndpoint())
+                .setMethod(HttpMethod.POST).setBucket(bucketName).setParameters(params)
+                .setOriginalRequest(genericRequest).setInputSize(0).setInputStream(new ByteArrayInputStream(new byte[0])).build();
+
+        return doOperation(request, requestIdResponseParser, bucketName, null, true);
     }
 }

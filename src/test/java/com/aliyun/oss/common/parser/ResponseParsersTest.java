@@ -3762,6 +3762,53 @@ public class ResponseParsersTest {
         } catch (Exception e) {
             Assert.assertTrue(false);
         }
+
+        respBody = "" +
+                "<LifecycleConfiguration>\n" +
+                "  <Rule>\n" +
+                "    <ID>RuleID</ID>\n" +
+                "    <Prefix>Prefix</Prefix>\n" +
+                "    <Status>Enabled</Status>\n" +
+                "    <Filter>\n" +
+                "      <ObjectSizeGreaterThan>500</ObjectSizeGreaterThan>\n" +
+                "      <ObjectSizeLessThan>64000</ObjectSizeLessThan>\n" +
+                "      <Not>\n" +
+                "        <Prefix>abc/not1/</Prefix>\n" +
+                "        <Tag>\n" +
+                "          <Key>notkey1</Key>\n" +
+                "          <Value>notvalue1</Value>\n" +
+                "        </Tag>\n" +
+                "      </Not>\n" +
+                "      <Not>\n" +
+                "        <Prefix>abc/not2/</Prefix>\n" +
+                "        <Tag>\n" +
+                "          <Key>notkey2</Key>\n" +
+                "          <Value>notvalue2</Value>\n" +
+                "        </Tag>\n" +
+                "      </Not>\n" +
+                "    </Filter>" +
+                "  </Rule>\n" +
+                "</LifecycleConfiguration>";
+
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        List<LifecycleRule> rules = null;
+        try {
+            rules = ResponseParsers.parseGetBucketLifecycle(instream);
+        } catch (ResponseParseException e) {
+            Assert.fail("parse response body fail!");
+        }
+
+        Assert.assertEquals("abc/not1/", rules.get(0).getFilter().getNotList().get(0).getPrefix());
+        Assert.assertEquals("notkey1", rules.get(0).getFilter().getNotList().get(0).getTag().getKey());
+        Assert.assertEquals("notvalue1", rules.get(0).getFilter().getNotList().get(0).getTag().getValue());
+        Assert.assertEquals("abc/not2/", rules.get(0).getFilter().getNotList().get(1).getPrefix());
+        Assert.assertEquals("notkey2", rules.get(0).getFilter().getNotList().get(1).getTag().getKey());
+        Assert.assertEquals("notvalue2", rules.get(0).getFilter().getNotList().get(1).getTag().getValue());
     }
 
     @Test
@@ -4186,6 +4233,72 @@ public class ResponseParsersTest {
     }
 
     @Test
+    public void testGetBucketInventoryConfigWithFilter() {
+        String respBody = "" +
+                "<InventoryConfiguration>\n" +
+                "     <Id>report1</Id>\n" +
+                "     <IsEnabled>true</IsEnabled>\n" +
+                "     <Filter>\n" +
+                "        <Prefix>filterPrefix/</Prefix>\n" +
+                "       \t<LastModifyBeginTimeStamp>1637883649</LastModifyBeginTimeStamp>\n" +
+                "     \t  <LastModifyEndTimeStamp>1638347592</LastModifyEndTimeStamp>\n" +
+                "     \t  <LowerSizeBound>1024</LowerSizeBound>\n" +
+                "     \t  <UpperSizeBound>5365000000000</UpperSizeBound>\n" +
+                "        <StorageClass>Standard,IA</StorageClass>\n" +
+                "     </Filter>\n" +
+                "     <Destination>\n" +
+                "        <OSSBucketDestination>\n" +
+                "           <Format>CSV</Format>\n" +
+                "           <AccountId>1000000000000000</AccountId>\n" +
+                "           <RoleArn>acs:ram::1000000000000000:role/AliyunOSSRole</RoleArn>\n" +
+                "           <Bucket>acs:oss:::destination-bucket</Bucket>\n" +
+                "           <Prefix>prefix1</Prefix>\n" +
+                "           <Encryption>\n" +
+                "              <SSE-KMS>\n" +
+                "                 <KeyId>keyId</KeyId>\n" +
+                "              </SSE-KMS>\n" +
+                "           </Encryption>\n" +
+                "        </OSSBucketDestination>\n" +
+                "     </Destination>\n" +
+                "     <Schedule>\n" +
+                "        <Frequency>Daily</Frequency>\n" +
+                "     </Schedule>\n" +
+                "     <IncludedObjectVersions>All</IncludedObjectVersions>\n" +
+                "     <OptionalFields>\n" +
+                "        <Field>Size</Field>\n" +
+                "        <Field>LastModifiedDate</Field>\n" +
+                "        <Field>ETag</Field>\n" +
+                "        <Field>StorageClass</Field>\n" +
+                "        <Field>IsMultipartUploaded</Field>\n" +
+                "        <Field>EncryptionStatus</Field>\n" +
+                "     </OptionalFields>\n" +
+                "  </InventoryConfiguration>";
+
+        InputStream instream = null;
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        GetBucketInventoryConfigurationResult result = null;
+
+        try {
+            result = ResponseParsers.parseGetBucketInventoryConfig(instream);
+        } catch (ResponseParseException e) {
+            Assert.fail("parse bucket replication response body fail!");
+        }
+
+        Assert.assertEquals("report1", result.getInventoryConfiguration().getInventoryId());
+        Assert.assertEquals("filterPrefix/", result.getInventoryConfiguration().getInventoryFilter().getPrefix());
+        Assert.assertEquals(Long.valueOf(1637883649), result.getInventoryConfiguration().getInventoryFilter().getLastModifyBeginTimeStamp());
+        Assert.assertEquals(Long.valueOf(1638347592), result.getInventoryConfiguration().getInventoryFilter().getLastModifyEndTimeStamp());
+        Assert.assertEquals(Long.valueOf(1024L), result.getInventoryConfiguration().getInventoryFilter().getLowerSizeBound());
+        Assert.assertEquals(Long.valueOf(5365000000000L), result.getInventoryConfiguration().getInventoryFilter().getUpperSizeBound());
+        Assert.assertEquals("Standard,IA", result.getInventoryConfiguration().getInventoryFilter().getStorageClass());
+    }
+
+    @Test
     public void testGetBucketEncryptionResponseParser() {
         InputStream instream = null;
         String respBody;
@@ -4454,5 +4567,577 @@ public class ResponseParsersTest {
             Assert.fail("parse delete directory response body fail!");
         }
         Assert.assertEquals(false, result.isEnabled());
+    }
+
+
+    @Test
+    public void testGetBucketAccessMonitorResponseParser() {
+        String respBody = "" +
+                "<AccessMonitorConfiguration>\n" +
+                "    <Status>Enabled</Status>\n" +
+                "</AccessMonitorConfiguration>";
+
+        InputStream instream = null;
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        AccessMonitor result = null;
+        try {
+            ResponseMessage response = new ResponseMessage(null);
+            response.setContent(instream);
+            ResponseParsers.GetBucketAccessMonitorResponseParser parser = new ResponseParsers.GetBucketAccessMonitorResponseParser();
+            result = parser.parse(response);
+        } catch (ResponseParseException e) {
+            Assert.fail("parse delete directory response body fail!");
+        }
+
+        Assert.assertEquals("Enabled", result.getStatus());
+
+
+        respBody = "" +
+                "<AccessMonitorConfiguration>\n" +
+                "    <Status>Disabled</Status>\n" +
+                "</AccessMonitorConfiguration>";
+
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        result = null;
+        try {
+            ResponseMessage response = new ResponseMessage(null);
+            response.setContent(instream);
+            ResponseParsers.GetBucketAccessMonitorResponseParser parser = new ResponseParsers.GetBucketAccessMonitorResponseParser();
+            result = parser.parse(response);
+        } catch (ResponseParseException e) {
+            Assert.fail("parse delete directory response body fail!");
+        }
+        Assert.assertEquals("Disabled", result.getStatus());
+
+
+
+        respBody = "" +
+                "<AccessMonitorConfiguration>\n" +
+                "</AccessMonitorConfiguration>";
+
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        result = null;
+        try {
+            ResponseMessage response = new ResponseMessage(null);
+            response.setContent(instream);
+            ResponseParsers.GetBucketAccessMonitorResponseParser parser = new ResponseParsers.GetBucketAccessMonitorResponseParser();
+            result = parser.parse(response);
+        } catch (ResponseParseException e) {
+            Assert.fail("parse delete directory response body fail!");
+        }
+        Assert.assertEquals("Disabled", result.getStatus());
+    }
+    @Test
+    public void testParseGetBucketInfoWithAccessMonitor() {
+        String respBody = "" +
+                "<BucketInfo>\n" +
+                "  <Bucket>\n" +
+                "           <CreationDate>2013-07-31T10:56:21.000Z</CreationDate>\n" +
+                "            <ExtranetEndpoint>oss-cn-hangzhou.aliyuncs.com</ExtranetEndpoint>\n" +
+                "            <IntranetEndpoint>oss-cn-hangzhou-internal.aliyuncs.com</IntranetEndpoint>\n" +
+                "            <Location>oss-cn-hangzhou</Location>\n" +
+                "            <Name>oss-example</Name>\n" +
+                "            <AccessMonitor>Enabled</AccessMonitor>\n" +
+                "            <Owner>\n" +
+                "              <DisplayName>username</DisplayName>\n" +
+                "              <ID>27183473914****</ID>\n" +
+                "            </Owner>\n" +
+                "            <AccessControlList>\n" +
+                "              <Grant>private</Grant>\n" +
+                "            </AccessControlList>\n" +
+                "            <Comment>test</Comment>\n" +
+                "            <DataRedundancyType>LRS</DataRedundancyType>\n" +
+                "          </Bucket>\n" +
+                " </BucketInfo>";
+
+        InputStream instream = null;
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        BucketInfo result = null;
+        try {
+            result = ResponseParsers.parseGetBucketInfo(instream);
+        } catch (ResponseParseException e) {
+            Assert.fail("parse bucket replication response body fail!");
+        }
+
+        Assert.assertEquals("test", result.getComment());
+        Assert.assertEquals(DataRedundancyType.LRS, result.getDataRedundancyType());
+        Assert.assertEquals(CannedAccessControlList.Private, result.getCannedACL());
+        Assert.assertEquals("oss-cn-hangzhou", result.getBucket().getLocation());
+        Assert.assertEquals("oss-example", result.getBucket().getName());
+        Assert.assertEquals(null, result.getBucket().getHnsStatus());
+        Assert.assertEquals(null, result.getBucket().getResourceGroupId());
+        Assert.assertEquals("Enabled", result.getBucket().getAccessMonitor());
+
+        respBody = "" +
+                "<BucketInfo>\n" +
+                "  <Bucket>\n" +
+                "           <CreationDate>2013-07-31T10:56:21.000Z</CreationDate>\n" +
+                "            <ExtranetEndpoint>oss-cn-hangzhou.aliyuncs.com</ExtranetEndpoint>\n" +
+                "            <HierarchicalNamespace>Enabled</HierarchicalNamespace>\n" +
+                "            <IntranetEndpoint>oss-cn-hangzhou-internal.aliyuncs.com</IntranetEndpoint>\n" +
+                "            <Location>oss-cn-hangzhou</Location>\n" +
+                "            <ResourceGroupId>xxx-id-123</ResourceGroupId>\n" +
+                "            <Name>oss-example</Name>\n" +
+                "            <AccessMonitor>Disabled</AccessMonitor>\n" +
+                "            <Owner>\n" +
+                "              <DisplayName>username</DisplayName>\n" +
+                "              <ID>27183473914****</ID>\n" +
+                "            </Owner>\n" +
+                "            <AccessControlList>\n" +
+                "              <Grant>private</Grant>\n" +
+                "            </AccessControlList>\n" +
+                "            <Comment>test</Comment>\n" +
+                "            <DataRedundancyType>LRS</DataRedundancyType>\n" +
+                "          </Bucket>\n" +
+                " </BucketInfo>";
+
+        instream = null;
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        result = null;
+        try {
+            result = ResponseParsers.parseGetBucketInfo(instream);
+        } catch (ResponseParseException e) {
+            Assert.fail("parse bucket replication response body fail!");
+        }
+
+        Assert.assertEquals("test", result.getComment());
+        Assert.assertEquals(DataRedundancyType.LRS, result.getDataRedundancyType());
+        Assert.assertEquals(CannedAccessControlList.Private, result.getCannedACL());
+        Assert.assertEquals("oss-cn-hangzhou", result.getBucket().getLocation());
+        Assert.assertEquals("oss-example", result.getBucket().getName());
+        Assert.assertEquals(HnsStatus.Enabled.toString(), result.getBucket().getHnsStatus());
+        Assert.assertEquals("xxx-id-123", result.getBucket().getResourceGroupId());
+        Assert.assertEquals("Disabled", result.getBucket().getAccessMonitor());
+    }
+
+    @Test
+    public void testGetMetaQueryStatusResponseParser() {
+        String respBody = "" +
+                "<MetaQuery>\n" +
+                "  <State>Running</State>\n" +
+                "  <Phase>FullScanning</Phase>\n" +
+                "  <CreateTime>2021-08-02T10:49:17.289372919+08:00</CreateTime>\n" +
+                "  <UpdateTime>2021-08-02T10:49:17.289372919+08:00</UpdateTime>\n" +
+                "</MetaQuery>";
+
+        InputStream instream = null;
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        GetMetaQueryStatusResult result = null;
+        try {
+            ResponseMessage response = new ResponseMessage(null);
+            response.setContent(instream);
+            ResponseParsers.GetMetaQueryStatusResponseParser parser = new ResponseParsers.GetMetaQueryStatusResponseParser();
+            result = parser.parse(response);
+        } catch (ResponseParseException e) {
+            Assert.fail("parse delete directory response body fail!");
+        }
+
+        Assert.assertEquals("Running", result.getState());
+        Assert.assertEquals("FullScanning", result.getPhase());
+        Assert.assertEquals("2021-08-02T10:49:17.289372919+08:00", result.getCreateTime());
+        Assert.assertEquals("2021-08-02T10:49:17.289372919+08:00", result.getUpdateTime());
+    }
+
+    @Test
+    public void testDoMetaQueryResponseParser() {
+        String respBody = "" +
+                "<MetaQuery>\n" +
+                "    <NextToken>MTIzNDU2NzgnV9zYW1wbGVvYmplY3QxLmpwZw==</NextToken>\n" +
+                "    <Files>    \n" +
+                "        <File>     \n" +
+                "            <Filename>exampleobject.txt</Filename>\n" +
+                "            <Size>120</Size>\n" +
+                "            <FileModifiedTime>2021-06-29T14:50:13.011643661+08:00</FileModifiedTime>\n" +
+                "            <FileCreateTime>2021-06-28T14:50:13.011643661+08:00</FileCreateTime>\n" +
+                "            <FileAccessTime>2021-06-27T14:50:13.011643661+08:00</FileAccessTime>\n" +
+                "            <OSSObjectType>Normal</OSSObjectType>\n" +
+                "            <OSSStorageClass>Standard</OSSStorageClass>\n" +
+                "            <ObjectACL>defalut</ObjectACL>\n" +
+                "            <ETag>fba9dede5f27731c9771645a3986****</ETag>\n" +
+                "            <OSSCRC64>4858A48BD1466884</OSSCRC64>\n" +
+                "            <OSSTaggingCount>2</OSSTaggingCount>\n" +
+                "            <OSSTagging>\n" +
+                "                <Tagging>\n" +
+                "                    <Key>owner</Key>\n" +
+                "                    <Value>John</Value>\n" +
+                "                </Tagging>\n" +
+                "                <Tagging>\n" +
+                "                    <Key>type</Key>\n" +
+                "                    <Value>document</Value>\n" +
+                "                </Tagging>\n" +
+                "            </OSSTagging>\n" +
+                "            <OSSUserMeta>\n" +
+                "                <UserMeta>\n" +
+                "                    <Key>x-oss-meta-location</Key>\n" +
+                "                    <Value>hangzhou</Value>\n" +
+                "                </UserMeta>\n" +
+                "            </OSSUserMeta>\n" +
+                "        </File>\n" +
+                "        <File>\n" +
+                "          <Filename>file2</Filename>\n" +
+                "          <Size>5168828111</Size>\n" +
+                "          <ObjectACL>private</ObjectACL>\n" +
+                "          <OSSObjectType>Appendable</OSSObjectType>\n" +
+                "          <OSSStorageClass>Standard</OSSStorageClass>\n" +
+                "          <ETag>etag</ETag>\n" +
+                "          <OSSCRC64>crc</OSSCRC64>\n" +
+                "          <OSSTaggingCount>2</OSSTaggingCount>\n" +
+                "          <OSSTagging>\n" +
+                "            <Tagging>\n" +
+                "              <Key>t3</Key>\n" +
+                "              <Value>v3</Value>\n" +
+                "            </Tagging>\n" +
+                "            <Tagging>\n" +
+                "              <Key>t4</Key>\n" +
+                "              <Value>v4</Value>\n" +
+                "            </Tagging>\n" +
+                "          </OSSTagging>\n" +
+                "          <OSSUserMeta>\n" +
+                "            <UserMeta>\n" +
+                "              <Key>u3</Key>\n" +
+                "              <Value>v3</Value>\n" +
+                "            </UserMeta>\n" +
+                "            <UserMeta>\n" +
+                "              <Key>u4</Key>\n" +
+                "              <Value>v4</Value>\n" +
+                "            </UserMeta>\n" +
+                "          </OSSUserMeta>\n" +
+                "        </File>\n" +
+                "    </Files>\n" +
+                "    <Aggregations>\n" +
+                "            <Aggregation>\n" +
+                "              <Field>Size</Field>\n" +
+                "              <Operation>sum</Operation>\n" +
+                "              <Value>200</Value>\n" +
+                "              <Groups>\n" +
+                "                <Group>\n" +
+                "                    <Value>100</Value>\n" +
+                "                    <Count>5</Count>\n" +
+                "                </Group>\n" +
+                "                <Group>\n" +
+                "                    <Value>300</Value>\n" +
+                "                    <Count>6</Count>\n" +
+                "                </Group>\n" +
+                "              </Groups>\n" +
+                "            </Aggregation>\n" +
+                "            <Aggregation>\n" +
+                "              <Field>Size</Field>\n" +
+                "              <Operation>max</Operation>\n" +
+                "              <Value>200.2</Value>\n" +
+                "            </Aggregation>\n" +
+                "            <Aggregation>\n" +
+                "              <Field>field1</Field>\n" +
+                "              <Operation>operation1</Operation>\n" +
+                "              <Groups>\n" +
+                "                <Group>\n" +
+                "                  <Value>value1</Value>\n" +
+                "                  <Count>10</Count>\n" +
+                "                </Group>\n" +
+                "                <Group>\n" +
+                "                  <Value>value2</Value>\n" +
+                "                  <Count>20</Count>\n" +
+                "                </Group>\n" +
+                "              </Groups>\n" +
+                "            </Aggregation>\n" +
+                "        </Aggregations>\n" +
+                "</MetaQuery>";
+
+        InputStream instream = null;
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        DoMetaQueryResult result = null;
+        try {
+            ResponseMessage response = new ResponseMessage(null);
+            response.setContent(instream);
+            ResponseParsers.DoMetaQueryResponseParser parser = new ResponseParsers.DoMetaQueryResponseParser();
+            result = parser.parse(response);
+        } catch (ResponseParseException e) {
+            Assert.fail("parse delete directory response body fail!");
+        }
+
+        Assert.assertEquals("MTIzNDU2NzgnV9zYW1wbGVvYmplY3QxLmpwZw==", result.getNextToken());
+
+        Assert.assertEquals("exampleobject.txt", result.getFiles().getFile().get(0).getFilename());
+        Assert.assertEquals(120L, result.getFiles().getFile().get(0).getSize());
+        Assert.assertEquals("2021-06-29T14:50:13.011643661+08:00", result.getFiles().getFile().get(0).getFileModifiedTime());
+        Assert.assertEquals("2021-06-28T14:50:13.011643661+08:00", result.getFiles().getFile().get(0).getFileCreateTime());
+        Assert.assertEquals("2021-06-27T14:50:13.011643661+08:00", result.getFiles().getFile().get(0).getFileAccessTime());
+        Assert.assertEquals("Normal", result.getFiles().getFile().get(0).getOssObjectType());
+        Assert.assertEquals("Standard", result.getFiles().getFile().get(0).getOssStorageClass());
+        Assert.assertEquals("defalut", result.getFiles().getFile().get(0).getObjectACL());
+        Assert.assertEquals("fba9dede5f27731c9771645a3986****", result.getFiles().getFile().get(0).getETag());
+        Assert.assertEquals("4858A48BD1466884", result.getFiles().getFile().get(0).getOssCRC64());
+        Assert.assertEquals(2, result.getFiles().getFile().get(0).getOssTaggingCount());
+        Assert.assertEquals("owner", result.getFiles().getFile().get(0).getOssTagging().getTagging().get(0).getKey());
+        Assert.assertEquals("John", result.getFiles().getFile().get(0).getOssTagging().getTagging().get(0).getValue());
+        Assert.assertEquals("type", result.getFiles().getFile().get(0).getOssTagging().getTagging().get(1).getKey());
+        Assert.assertEquals("document", result.getFiles().getFile().get(0).getOssTagging().getTagging().get(1).getValue());
+        Assert.assertEquals("x-oss-meta-location", result.getFiles().getFile().get(0).getOssUserMeta().getUserMeta().get(0).getKey());
+        Assert.assertEquals("hangzhou", result.getFiles().getFile().get(0).getOssUserMeta().getUserMeta().get(0).getValue());
+        Assert.assertEquals("file2", result.getFiles().getFile().get(1).getFilename());
+        Assert.assertEquals(5168828111L, result.getFiles().getFile().get(1).getSize());
+        Assert.assertEquals("Appendable", result.getFiles().getFile().get(1).getOssObjectType());
+        Assert.assertEquals("Standard", result.getFiles().getFile().get(1).getOssStorageClass());
+        Assert.assertEquals("private", result.getFiles().getFile().get(1).getObjectACL());
+        Assert.assertEquals("etag", result.getFiles().getFile().get(1).getETag());
+        Assert.assertEquals("crc", result.getFiles().getFile().get(1).getOssCRC64());
+        Assert.assertEquals(2, result.getFiles().getFile().get(1).getOssTaggingCount());
+        Assert.assertEquals("t3", result.getFiles().getFile().get(1).getOssTagging().getTagging().get(0).getKey());
+        Assert.assertEquals("v3", result.getFiles().getFile().get(1).getOssTagging().getTagging().get(0).getValue());
+        Assert.assertEquals("t4", result.getFiles().getFile().get(1).getOssTagging().getTagging().get(1).getKey());
+        Assert.assertEquals("v4", result.getFiles().getFile().get(1).getOssTagging().getTagging().get(1).getValue());
+        Assert.assertEquals("u3", result.getFiles().getFile().get(1).getOssUserMeta().getUserMeta().get(0).getKey());
+        Assert.assertEquals("v3", result.getFiles().getFile().get(1).getOssUserMeta().getUserMeta().get(0).getValue());
+        Assert.assertEquals("u4", result.getFiles().getFile().get(1).getOssUserMeta().getUserMeta().get(1).getKey());
+        Assert.assertEquals("v4", result.getFiles().getFile().get(1).getOssUserMeta().getUserMeta().get(1).getValue());
+        Assert.assertEquals("Size", result.getAggregations().getAggregation().get(0).getField());
+        Assert.assertEquals("sum", result.getAggregations().getAggregation().get(0).getOperation());
+        Assert.assertEquals(200.0, result.getAggregations().getAggregation().get(0).getValue());
+        Assert.assertEquals("100", result.getAggregations().getAggregation().get(0).getGroups().getGroup().get(0).getValue());
+        Assert.assertEquals(5, result.getAggregations().getAggregation().get(0).getGroups().getGroup().get(0).getCount());
+        Assert.assertEquals("300", result.getAggregations().getAggregation().get(0).getGroups().getGroup().get(1).getValue());
+        Assert.assertEquals(6, result.getAggregations().getAggregation().get(0).getGroups().getGroup().get(1).getCount());
+        Assert.assertEquals("Size", result.getAggregations().getAggregation().get(1).getField());
+        Assert.assertEquals("max", result.getAggregations().getAggregation().get(1).getOperation());
+        Assert.assertEquals(200.2, result.getAggregations().getAggregation().get(1).getValue());
+        Assert.assertEquals("field1", result.getAggregations().getAggregation().get(2).getField());
+        Assert.assertEquals("operation1", result.getAggregations().getAggregation().get(2).getOperation());
+        Assert.assertEquals("value1", result.getAggregations().getAggregation().get(2).getGroups().getGroup().get(0).getValue());
+        Assert.assertEquals(10, result.getAggregations().getAggregation().get(2).getGroups().getGroup().get(0).getCount());
+        Assert.assertEquals("value2", result.getAggregations().getAggregation().get(2).getGroups().getGroup().get(1).getValue());
+        Assert.assertEquals(20, result.getAggregations().getAggregation().get(2).getGroups().getGroup().get(1).getCount());
+    }
+
+    @Test
+    public void testParseErrorResponse() {
+        InputStream instream = null;
+        String respBody;
+
+        respBody = "" +
+                "<Error>\n" +
+                "  <Code>MethodNotAllowed</Code>\n" +
+                "  <Message>The specified method is not allowed against this resource.</Message>\n" +
+                "  <RequestId>5CAC0CF8DE0170*****</RequestId>\n" +
+                "  <HostId>versioning-get.oss-cn-hangzhou.aliyunc*****</HostId>\n" +
+                "  <ResourceType>DeleteMarker</ResourceType>\n" +
+                "  <Method>GET</Method>\n" +
+                "  <Header>If-Modified-Since</Header>\n" +
+                "</Error>";
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+
+        OSSErrorResult result = null;
+        try {
+            ResponseMessage response = new ResponseMessage(null);
+            response.setContent(instream);
+            ResponseParsers.ErrorResponseParser parser = new ResponseParsers.ErrorResponseParser();
+            result = parser.parse(response);
+        } catch (ResponseParseException e) {
+            Assert.fail("parse delete directory response body fail!");
+        }
+
+        Assert.assertEquals("MethodNotAllowed", result.Code);
+        Assert.assertEquals("The specified method is not allowed against this resource.", result.Message);
+        Assert.assertEquals("5CAC0CF8DE0170*****", result.RequestId);
+        Assert.assertEquals("versioning-get.oss-cn-hangzhou.aliyunc*****", result.HostId);
+        Assert.assertEquals("DeleteMarker", result.ResourceType);
+        Assert.assertEquals("GET", result.Method);
+        Assert.assertEquals("If-Modified-Since", result.Header);
+
+        respBody = "" +
+                "<Error>\n" +
+                "  <Code></Code>\n" +
+                "  <Message></Message>\n" +
+                "  <RequestId></RequestId>\n" +
+                "  <HostId></HostId>\n" +
+                "  <ResourceType></ResourceType>\n" +
+                "  <Method></Method>\n" +
+                "  <Header></Header>\n" +
+                "</Error>";
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        try {
+            ResponseMessage response = new ResponseMessage(null);
+            response.setContent(instream);
+            ResponseParsers.ErrorResponseParser parser = new ResponseParsers.ErrorResponseParser();
+            result = parser.parse(response);
+            Assert.assertTrue(true);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Assert.assertTrue(false);
+        }
+    }
+
+    @Test
+    public void testParseListObjectsWithRestoreInfo() {
+        InputStream instream = null;
+        String respBody;
+
+        respBody = "" +
+                "<ListBucketResult>\n" +
+                "  <Name>oss-java-sdk-1667542813</Name>\n" +
+                "  <Prefix></Prefix>\n" +
+                "  <Marker></Marker>\n" +
+                "  <MaxKeys>100</MaxKeys>\n" +
+                "  <Delimiter></Delimiter>\n" +
+                "  <IsTruncated>false</IsTruncated>\n" +
+                "  <Contents>\n" +
+                "    <Key>object-with-special-restore</Key>\n" +
+                "    <LastModified>2022-11-04T05:23:18.000Z</LastModified>\n" +
+                "    <ETag>\"AB56B4D92B40713ACC5AF89985D4B786\"</ETag>\n" +
+                "    <Type>Normal</Type>\n" +
+                "    <Size>5</Size>\n" +
+                "    <StorageClass>Archive</StorageClass>\n" +
+                "    <Owner>\n" +
+                "      <ID>1283641064516515</ID>\n" +
+                "      <DisplayName>1283641064516515</DisplayName>\n" +
+                "    </Owner>\n" +
+                "    <RestoreInfo>ongoing-request=\"true\"</RestoreInfo>\n" +
+                "  </Contents>\n" +
+                "</ListBucketResult>";
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        ObjectListing result = null;
+        try {
+            result = ResponseParsers.parseListObjects(instream);
+            Assert.assertTrue(true);
+        } catch (Exception e) {
+            Assert.assertTrue(false);
+        }
+        Assert.assertEquals("object-with-special-restore", result.getObjectSummaries().get(0).getKey());
+        Assert.assertEquals("ongoing-request=\"true\"", result.getObjectSummaries().get(0).getRestoreInfo());
+    }
+
+    @Test
+    public void testParseListObjectsV2WithRestoreInfo() {
+        InputStream instream = null;
+        String respBody;
+
+        respBody = "" +
+                "<ListBucketResult>\n" +
+                "  <Name>oss-java-sdk-1667548362-list-v2</Name>\n" +
+                "  <Prefix></Prefix>\n" +
+                "  <MaxKeys>100</MaxKeys>\n" +
+                "  <Delimiter></Delimiter>\n" +
+                "  <IsTruncated>false</IsTruncated>\n" +
+                "  <Contents>\n" +
+                "    <Key>object-with-special-restore</Key>\n" +
+                "    <LastModified>2022-11-04T07:37:25.000Z</LastModified>\n" +
+                "    <ETag>\"AB56B4D92B40713ACC5AF89985D4B786\"</ETag>\n" +
+                "    <Type>Normal</Type>\n" +
+                "    <Size>5</Size>\n" +
+                "    <StorageClass>Archive</StorageClass>\n" +
+                "    <RestoreInfo>ongoing-request=\"false\", expiry-date=\"Sat, 05 Nov 2022 07:38:08 GMT\"</RestoreInfo>\n" +
+                "  </Contents>\n" +
+                "  <KeyCount>1</KeyCount>\n" +
+                "</ListBucketResult>\n";
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        ListObjectsV2Result result = null;
+        try {
+            result = ResponseParsers.parseListObjectsV2(instream);
+            Assert.assertTrue(true);
+        } catch (Exception e) {
+            Assert.assertTrue(false);
+        }
+        Assert.assertEquals("object-with-special-restore", result.getObjectSummaries().get(0).getKey());
+        Assert.assertEquals("ongoing-request=\"false\", expiry-date=\"Sat, 05 Nov 2022 07:38:08 GMT\"", result.getObjectSummaries().get(0).getRestoreInfo());
+    }
+
+    @Test
+    public void testParseListVersionsWithRestoreInfo() {
+        InputStream instream = null;
+        String respBody;
+
+        respBody = "" +
+                "<ListVersionsResult>\n" +
+                "  <Name>oss-java-sdk-1667549556-list-versions</Name>\n" +
+                "  <Prefix></Prefix>\n" +
+                "  <KeyMarker></KeyMarker>\n" +
+                "  <VersionIdMarker></VersionIdMarker>\n" +
+                "  <MaxKeys>100</MaxKeys>\n" +
+                "  <Delimiter></Delimiter>\n" +
+                "  <IsTruncated>false</IsTruncated>\n" +
+                "  <Version>\n" +
+                "    <Key>object-with-special-restore</Key>\n" +
+                "    <VersionId>CAEQDxiBgID78pyGohgiIDFhNWM0ODYxMDcyNTQ0ODJiZDJjZDlmNjRhZmU5MWEy</VersionId>\n" +
+                "    <IsLatest>true</IsLatest>\n" +
+                "    <LastModified>2022-11-04T07:32:45.000Z</LastModified>\n" +
+                "    <ETag>\"AB56B4D92B40713ACC5AF89985D4B786\"</ETag>\n" +
+                "    <Type>Normal</Type>\n" +
+                "    <Size>5</Size>\n" +
+                "    <StorageClass>Archive</StorageClass>\n" +
+                "    <RestoreInfo>ongoing-request=\"true\"</RestoreInfo>\n" +
+                "    <Owner>\n" +
+                "      <ID>1283641064516515</ID>\n" +
+                "      <DisplayName>1283641064516515</DisplayName>\n" +
+                "    </Owner>\n" +
+                "  </Version>\n" +
+                "</ListVersionsResult>";
+        try {
+            instream = new ByteArrayInputStream(respBody.getBytes("utf-8"));
+        } catch (UnsupportedEncodingException e) {
+            Assert.fail("UnsupportedEncodingException");
+        }
+
+        VersionListing result = null;
+        try {
+            result = ResponseParsers.parseListVersions(instream);
+            Assert.assertTrue(true);
+        } catch (Exception e) {
+            Assert.assertTrue(false);
+        }
+        Assert.assertEquals("object-with-special-restore", result.getVersionSummaries().get(0).getKey());
+        Assert.assertEquals("ongoing-request=\"true\"", result.getVersionSummaries().get(0).getRestoreInfo());
     }
 }

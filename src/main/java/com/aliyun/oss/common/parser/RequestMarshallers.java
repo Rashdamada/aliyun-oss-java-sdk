@@ -31,6 +31,7 @@ import com.aliyun.oss.ClientException;
 import com.aliyun.oss.common.comm.io.FixedLengthInputStream;
 import com.aliyun.oss.common.utils.BinaryUtil;
 import com.aliyun.oss.common.utils.DateUtil;
+import com.aliyun.oss.common.utils.StringUtils;
 import com.aliyun.oss.internal.RequestParameters;
 import com.aliyun.oss.model.*;
 import com.aliyun.oss.model.AddBucketReplicationRequest.ReplicationAction;
@@ -97,6 +98,8 @@ public final class RequestMarshallers {
 
     public static final SetBucketResourceGroupRequestMarshaller setBucketResourceGroupRequestMarshaller = new SetBucketResourceGroupRequestMarshaller();
     public static final PutBucketTransferAccelerationRequestMarshaller putBucketTransferAccelerationRequestMarshaller = new PutBucketTransferAccelerationRequestMarshaller();
+    public static final PutBucketAccessMonitorRequestMarshaller putBucketAccessMonitorRequestMarshaller = new PutBucketAccessMonitorRequestMarshaller();
+    public static final DoMetaQueryRequestMarshaller doMetaQueryRequestMarshaller = new DoMetaQueryRequestMarshaller();
 
     public interface RequestMarshaller<R> extends Marshaller<FixedLengthInputStream, R> {
 
@@ -224,6 +227,9 @@ public final class RequestMarshallers {
                 }
                 if (request.getDataRedundancyType() != null) {
                     xmlBody.append("<DataRedundancyType>" + request.getDataRedundancyType().toString() + "</DataRedundancyType>");
+                }
+                if (request.getXcType() != null) {
+                    xmlBody.append("<XCType>" + request.getXcType() + "</XCType>");
                 }
                 xmlBody.append("</CreateBucketConfiguration>");
             }
@@ -530,6 +536,23 @@ public final class RequestMarshallers {
                     }
                 }
 
+                if(rule.getFilter() != null){
+                    xmlBody.append("<Filter>");
+
+                    for(LifecycleNot not : rule.getFilter().getNotList()){
+                        xmlBody.append("<Not>");
+                        xmlBody.append("<Prefix>" + not.getPrefix() + "</Prefix>");
+                        if(not.getTag() != null){
+                            xmlBody.append("<Tag>");
+                            xmlBody.append("<Key>" + not.getTag().getKey() + "</Key>");
+                            xmlBody.append("<Value>" + not.getTag().getValue() + "</Value>");
+                            xmlBody.append("</Tag>");
+                        }
+                        xmlBody.append("</Not>");
+                    }
+                    xmlBody.append("</Filter>");
+                }
+
                 if (rule.getStatus() == RuleStatus.Enabled) {
                     xmlBody.append("<Status>Enabled</Status>");
                 } else {
@@ -571,6 +594,17 @@ public final class RequestMarshallers {
                             String formatDate = DateUtil.formatIso8601Date(storageTransition.getCreatedBeforeDate());
                             xmlBody.append("<CreatedBeforeDate>" + formatDate + "</CreatedBeforeDate>");
                         }
+                        if (storageTransition.hasIsAccessTime()) {
+                            xmlBody.append("<IsAccessTime>" + storageTransition.getIsAccessTime() + "</IsAccessTime>");
+                        }
+                        if (storageTransition.hasReturnToStdWhenVisit()) {
+                            xmlBody.append("<ReturnToStdWhenVisit>" + storageTransition.getReturnToStdWhenVisit() + "</ReturnToStdWhenVisit>");
+                        }
+
+                        if (storageTransition.hasAllowSmallFile()) {
+                            xmlBody.append("<AllowSmallFile>" + storageTransition.getAllowSmallFile() + "</AllowSmallFile>");
+                        }
+
                         xmlBody.append("<StorageClass>" + storageTransition.getStorageClass() + "</StorageClass>");
                         xmlBody.append("</Transition>");
                     }
@@ -588,6 +622,17 @@ public final class RequestMarshallers {
                     for (NoncurrentVersionStorageTransition transition : rule.getNoncurrentVersionStorageTransitions()) {
                         xmlBody.append("<NoncurrentVersionTransition>");
                         xmlBody.append("<NoncurrentDays>" + transition.getNoncurrentDays() + "</NoncurrentDays>");
+                        if (transition.hasIsAccessTime()) {
+                            xmlBody.append("<IsAccessTime>" + transition.getIsAccessTime() + "</IsAccessTime>");
+                        }
+                        if (transition.hasReturnToStdWhenVisit()) {
+                            xmlBody.append("<ReturnToStdWhenVisit>" + transition.getReturnToStdWhenVisit() + "</ReturnToStdWhenVisit>");
+                        }
+
+                        if (transition.hasAllowSmallFile()) {
+                            xmlBody.append("<AllowSmallFile>" + transition.getAllowSmallFile() + "</AllowSmallFile>");
+                        }
+
                         xmlBody.append("<StorageClass>" + transition.getStorageClass() + "</StorageClass>");
                         xmlBody.append("</NoncurrentVersionTransition>");
                     }
@@ -1344,6 +1389,21 @@ public final class RequestMarshallers {
                 if (config.getInventoryFilter().getPrefix() != null) {
                     xmlBody.append("<Filter>");
                     xmlBody.append("<Prefix>" +config.getInventoryFilter().getPrefix() + "</Prefix>");
+                    if(config.getInventoryFilter().getLastModifyBeginTimeStamp() != null){
+                        xmlBody.append("<LastModifyBeginTimeStamp>" +config.getInventoryFilter().getLastModifyBeginTimeStamp() + "</LastModifyBeginTimeStamp>");
+                    }
+                    if(config.getInventoryFilter().getLastModifyEndTimeStamp() != null) {
+                        xmlBody.append("<LastModifyEndTimeStamp>" + config.getInventoryFilter().getLastModifyEndTimeStamp() + "</LastModifyEndTimeStamp>");
+                    }
+                    if(config.getInventoryFilter().getLowerSizeBound() != null) {
+                        xmlBody.append("<LowerSizeBound>" + config.getInventoryFilter().getLowerSizeBound() + "</LowerSizeBound>");
+                    }
+                    if(config.getInventoryFilter().getUpperSizeBound() != null) {
+                        xmlBody.append("<UpperSizeBound>" + config.getInventoryFilter().getUpperSizeBound() + "</UpperSizeBound>");
+                    }
+                    if(config.getInventoryFilter().getStorageClass() != null) {
+                        xmlBody.append("<StorageClass>" + config.getInventoryFilter().getStorageClass() + "</StorageClass>");
+                    }
                     xmlBody.append("</Filter>");
                 }
             }
@@ -1735,6 +1795,70 @@ public final class RequestMarshallers {
                 throw new ClientException("Unsupported encoding " + e.getMessage(), e);
             }
 
+            return rawData;
+        }
+    }
+
+    public static final class PutBucketAccessMonitorRequestMarshaller implements RequestMarshaller2<PutBucketAccessMonitorRequest> {
+        @Override
+        public byte[] marshall(PutBucketAccessMonitorRequest input) {
+            StringBuffer xmlBody = new StringBuffer();
+            xmlBody.append("<AccessMonitorConfiguration><Status>");
+            xmlBody.append(input.getStatus());
+            xmlBody.append("</Status></AccessMonitorConfiguration>");
+
+            byte[] rawData = null;
+            try {
+                rawData = xmlBody.toString().getBytes(DEFAULT_CHARSET_NAME);
+            } catch (UnsupportedEncodingException e) {
+                throw new ClientException("Unsupported encoding " + e.getMessage(), e);
+            }
+            return rawData;
+        }
+    }
+
+    public static final class DoMetaQueryRequestMarshaller implements RequestMarshaller2<DoMetaQueryRequest> {
+        @Override
+        public byte[] marshall(DoMetaQueryRequest input) {
+            StringBuffer xmlBody = new StringBuffer();
+            xmlBody.append("<MetaQuery>");
+            if(input.getNextToken() != null){
+                xmlBody.append("<NextToken>"+ input.getNextToken() +"</NextToken>");
+            }
+            xmlBody.append("<MaxResults>"+ input.getMaxResults() +"</MaxResults>");
+
+            if(input.getQuery() != null){
+                xmlBody.append("<Query>"+ escapeKey(input.getQuery()) +"</Query>");
+            }
+            if(input.getSort() != null){
+                xmlBody.append("<Sort>"+ input.getSort() +"</Sort>");
+            }
+
+            if(input.getOrder() != null){
+                xmlBody.append("<Order>"+ input.getOrder() +"</Order>");
+            }
+            if(input.getAggregations() != null && input.getAggregations().getAggregation() != null){
+                xmlBody.append("<Aggregations>");
+                for(Aggregation agg : input.getAggregations().getAggregation()){
+                    xmlBody.append("<Aggregation>");
+                    if(!StringUtils.isNullOrEmpty(agg.getField())){
+                        xmlBody.append("<Field>"+ agg.getField() +"</Field>");
+                    }
+                    if(!StringUtils.isNullOrEmpty(agg.getOperation())){
+                        xmlBody.append("<Operation>"+ agg.getOperation() +"</Operation>");
+                    }
+                    xmlBody.append("</Aggregation>");
+                }
+                xmlBody.append("</Aggregations>");
+            }
+            xmlBody.append("</MetaQuery>");
+
+            byte[] rawData = null;
+            try {
+                rawData = xmlBody.toString().getBytes(DEFAULT_CHARSET_NAME);
+            } catch (UnsupportedEncodingException e) {
+                throw new ClientException("Unsupported encoding " + e.getMessage(), e);
+            }
             return rawData;
         }
     }

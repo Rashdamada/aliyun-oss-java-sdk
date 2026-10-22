@@ -24,7 +24,7 @@
         <dependency>
             <groupId>org.codehaus.jettison</groupId>
             <artifactId>jettison</artifactId>
-            <version>1.5.1</version>
+            <version>1.5.7</version>
         </dependency>
         <dependency>
             <groupId>com.aliyun</groupId>
@@ -205,12 +205,12 @@
         <license>
             <name>The Apache License, Version 2.0</name>
             <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
-            <distribution></distribution>
+            <distribution/>
         </license>
     </licenses>
     <scm>
-        <url></url>
-        <connection></connection>
+        <url/>
+        <connection/>
     </scm>
     <developers>
         <developer>

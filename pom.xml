@@ -14,7 +14,7 @@
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
-            <version>4.5.13</version>
+            <version>4.5.14</version>
         </dependency>
         <dependency>
             <groupId>org.jdom</groupId>
@@ -205,12 +205,12 @@
         <license>
             <name>The Apache License, Version 2.0</name>
             <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
-            <distribution></distribution>
+            <distribution/>
         </license>
     </licenses>
     <scm>
-        <url></url>
-        <connection></connection>
+        <url/>
+        <connection/>
     </scm>
     <developers>
         <developer>
